@@ -2,15 +2,29 @@
 name = "taskflow-mcp"
 version = "0.1.0"
 description = "Filesystem-backed MCP server for task-based workflows"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
-    "mcp-server-python",
+    "mcp",
     "jsonschema"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "flake8>=6.0.0"
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["taskflow_mcp"]
 
 [project.scripts]
 taskflow-mcp = "taskflow_mcp.server:main"

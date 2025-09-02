@@ -1,7 +1,8 @@
 import os
 import json
 from jsonschema import validate, ValidationError
-from mcp.server import Server, Resource
+from mcp.server import Server
+from mcp.types import Resource, TextResourceContents
 
 BASE_DIR = ".tasks"
 
@@ -29,9 +30,8 @@ def task_path(task_id, filename):
 # ---------------- Resource Providers ----------------
 
 
-@server.resource("task")
-def list_task_resources() -> list[Resource]:
-    """List all tasks and their artifacts."""
+def _list_task_resources_sync() -> list[Resource]:
+    """Synchronous version of list_task_resources for testing."""
     resources = []
     if not os.path.exists(BASE_DIR):
         return resources
@@ -42,16 +42,59 @@ def list_task_resources() -> list[Resource]:
         for fname in ["INVESTIGATION.md", "SOLUTION_PLAN.md", "CHECKLIST.json"]:
             path = os.path.join(folder, fname)
             if os.path.exists(path):
+                # Determine MIME type based on file extension
+                if fname.endswith(".md"):
+                    mime_type = "text/markdown"
+                elif fname.endswith(".json"):
+                    mime_type = "application/json"
+                else:
+                    mime_type = "text/plain"
+
                 resources.append(
-                    Resource(uri=f"task://{task_id}/{fname}", text=open(path).read())
+                    Resource(
+                        uri=f"task://{task_id}/{fname}",
+                        name=fname,
+                        mimeType=mime_type,
+                        description=f"Task {task_id} - {fname}",
+                    )
                 )
     return resources
+
+
+@server.list_resources()
+async def list_task_resources() -> list[Resource]:
+    """List all tasks and their artifacts."""
+    return _list_task_resources_sync()
+
+
+@server.read_resource()
+async def read_task_resource(uri: str) -> str:
+    """Read the content of a task resource."""
+    if not uri.startswith("task://"):
+        raise ValueError(f"Invalid resource URI: {uri}")
+
+    # Extract task_id and filename from URI
+    path_part = uri[6:]  # Remove "task://" prefix
+    parts = path_part.split("/", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Invalid resource URI format: {uri}")
+
+    task_id, filename = parts
+    path = task_path(task_id, filename)
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Resource not found: {uri}")
+
+    with open(path, "r") as f:
+        return f.read()
 
 
 # ---------------- Creation Methods ----------------
 
 
-@server.method
+# ---------------- Tool Definitions ----------------
+
+
 def create_investigation(task_id: str, content: str = "# Investigation\n\n") -> str:
     path = task_path(task_id, "INVESTIGATION.md")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -60,7 +103,6 @@ def create_investigation(task_id: str, content: str = "# Investigation\n\n") -> 
     return f"Created {path}"
 
 
-@server.method
 def create_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> str:
     inv_path = task_path(task_id, "INVESTIGATION.md")
     if not os.path.exists(inv_path):
@@ -71,7 +113,6 @@ def create_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> 
     return f"Created {path}"
 
 
-@server.method
 def create_checklist(task_id: str, checklist=None) -> str:
     sol_path = task_path(task_id, "SOLUTION_PLAN.md")
     if not os.path.exists(sol_path):
@@ -85,7 +126,6 @@ def create_checklist(task_id: str, checklist=None) -> str:
     return f"Created {path}"
 
 
-@server.method
 def update_checklist(task_id: str, checklist) -> str:
     validate(instance=checklist, schema=CHECKLIST_SCHEMA)
     path = task_path(task_id, "CHECKLIST.json")
@@ -94,6 +134,108 @@ def update_checklist(task_id: str, checklist) -> str:
     with open(path, "w") as f:
         json.dump(checklist, f, indent=2)
     return f"Updated {path}"
+
+
+# Register tools with the server
+@server.list_tools()
+async def list_tools() -> list:
+    """List available tools."""
+    from mcp.types import Tool, TextContent
+
+    return [
+        Tool(
+            name="create_investigation",
+            description="Create an investigation document for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "content": {
+                        "type": "string",
+                        "description": "The investigation content",
+                        "default": "# Investigation\n\n",
+                    },
+                },
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="create_solution_plan",
+            description="Create a solution plan document for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "content": {
+                        "type": "string",
+                        "description": "The solution plan content",
+                        "default": "# Solution Plan\n\n",
+                    },
+                },
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="create_checklist",
+            description="Create a checklist for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "checklist": {
+                        "type": "array",
+                        "description": "The checklist items",
+                        "default": [],
+                    },
+                },
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="update_checklist",
+            description="Update an existing checklist for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "checklist": {
+                        "type": "array",
+                        "description": "The updated checklist items",
+                    },
+                },
+                "required": ["task_id", "checklist"],
+            },
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list:
+    """Handle tool calls."""
+    from mcp.types import TextContent
+
+    if name == "create_investigation":
+        result = create_investigation(
+            task_id=arguments["task_id"],
+            content=arguments.get("content", "# Investigation\n\n"),
+        )
+    elif name == "create_solution_plan":
+        result = create_solution_plan(
+            task_id=arguments["task_id"],
+            content=arguments.get("content", "# Solution Plan\n\n"),
+        )
+    elif name == "create_checklist":
+        result = create_checklist(
+            task_id=arguments["task_id"], checklist=arguments.get("checklist", [])
+        )
+    elif name == "update_checklist":
+        result = update_checklist(
+            task_id=arguments["task_id"], checklist=arguments["checklist"]
+        )
+    else:
+        raise ValueError(f"Unknown tool: {name}")
+
+    return [TextContent(type="text", text=result)]
 
 
 # ---------------- Entrypoint ----------------
