@@ -1,8 +1,12 @@
-import os
 import json
-from jsonschema import validate, ValidationError
+import os
+from typing import Any
+
+from jsonschema import validate
+from jsonschema.validators import Draft202012Validator
 from mcp.server import Server
-from mcp.types import Resource, TextResourceContents
+from mcp.types import Resource, TextContent, Tool
+from pydantic import AnyUrl
 
 BASE_DIR = ".tasks"
 
@@ -23,16 +27,16 @@ CHECKLIST_SCHEMA = {
 server = Server(name="taskflow-mcp")
 
 
-def task_path(task_id, filename):
+def task_path(task_id: str, filename: str) -> str:
     return os.path.join(BASE_DIR, task_id, filename)
 
 
 # ---------------- Resource Providers ----------------
 
 
-def _list_task_resources_sync() -> list[Resource]:
+def list_task_resources_sync() -> list[Resource]:
     """Synchronous version of list_task_resources for testing."""
-    resources = []
+    resources: list[Resource] = []
     if not os.path.exists(BASE_DIR):
         return resources
     for task_id in os.listdir(BASE_DIR):
@@ -52,7 +56,7 @@ def _list_task_resources_sync() -> list[Resource]:
 
                 resources.append(
                     Resource(
-                        uri=f"task://{task_id}/{fname}",
+                        uri=AnyUrl(f"task://{task_id}/{fname}"),
                         name=fname,
                         mimeType=mime_type,
                         description=f"Task {task_id} - {fname}",
@@ -64,28 +68,29 @@ def _list_task_resources_sync() -> list[Resource]:
 @server.list_resources()
 async def list_task_resources() -> list[Resource]:
     """List all tasks and their artifacts."""
-    return _list_task_resources_sync()
+    return list_task_resources_sync()
 
 
 @server.read_resource()
-async def read_task_resource(uri: str) -> str:
+async def read_task_resource(uri: AnyUrl) -> str:
     """Read the content of a task resource."""
-    if not uri.startswith("task://"):
-        raise ValueError(f"Invalid resource URI: {uri}")
+    uri_str = str(uri)
+    if not uri_str.startswith("task://"):
+        raise ValueError(f"Invalid resource URI: {uri_str}")
 
     # Extract task_id and filename from URI
-    path_part = uri[6:]  # Remove "task://" prefix
+    path_part = uri_str[6:]  # Remove "task://" prefix
     parts = path_part.split("/", 1)
     if len(parts) != 2:
-        raise ValueError(f"Invalid resource URI format: {uri}")
+        raise ValueError(f"Invalid resource URI format: {uri_str}")
 
     task_id, filename = parts
     path = task_path(task_id, filename)
 
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Resource not found: {uri}")
+        raise FileNotFoundError(f"Resource not found: {uri_str}")
 
-    with open(path, "r") as f:
+    with open(path) as f:
         return f.read()
 
 
@@ -113,21 +118,21 @@ def create_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> 
     return f"Created {path}"
 
 
-def create_checklist(task_id: str, checklist=None) -> str:
+def create_checklist(task_id: str, checklist: list[dict[str, Any]] | None = None) -> str:
     sol_path = task_path(task_id, "SOLUTION_PLAN.md")
     if not os.path.exists(sol_path):
         raise ValueError("Cannot create CHECKLIST.json without SOLUTION_PLAN.md")
     if checklist is None:
         checklist = []
-    validate(instance=checklist, schema=CHECKLIST_SCHEMA)
+    validate(instance=checklist, schema=CHECKLIST_SCHEMA, cls=Draft202012Validator)
     path = task_path(task_id, "CHECKLIST.json")
     with open(path, "w") as f:
         json.dump(checklist, f, indent=2)
     return f"Created {path}"
 
 
-def update_checklist(task_id: str, checklist) -> str:
-    validate(instance=checklist, schema=CHECKLIST_SCHEMA)
+def update_checklist(task_id: str, checklist: list[dict[str, Any]]) -> str:
+    validate(instance=checklist, schema=CHECKLIST_SCHEMA, cls=Draft202012Validator)
     path = task_path(task_id, "CHECKLIST.json")
     if not os.path.exists(path):
         raise FileNotFoundError("CHECKLIST.json not found")
@@ -138,9 +143,8 @@ def update_checklist(task_id: str, checklist) -> str:
 
 # Register tools with the server
 @server.list_tools()
-async def list_tools() -> list:
+async def list_tools() -> list[Tool]:
     """List available tools."""
-    from mcp.types import Tool, TextContent
 
     return [
         Tool(
@@ -210,9 +214,8 @@ async def list_tools() -> list:
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls."""
-    from mcp.types import TextContent
 
     if name == "create_investigation":
         result = create_investigation(
@@ -225,13 +228,9 @@ async def call_tool(name: str, arguments: dict) -> list:
             content=arguments.get("content", "# Solution Plan\n\n"),
         )
     elif name == "create_checklist":
-        result = create_checklist(
-            task_id=arguments["task_id"], checklist=arguments.get("checklist", [])
-        )
+        result = create_checklist(task_id=arguments["task_id"], checklist=arguments.get("checklist", []))
     elif name == "update_checklist":
-        result = update_checklist(
-            task_id=arguments["task_id"], checklist=arguments["checklist"]
-        )
+        result = update_checklist(task_id=arguments["task_id"], checklist=arguments["checklist"])
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -241,8 +240,20 @@ async def call_tool(name: str, arguments: dict) -> list:
 # ---------------- Entrypoint ----------------
 
 
-def main():
-    server.run()
+def main() -> None:
+    import asyncio
+
+    from mcp import stdio_server
+
+    async def run_server():
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream=read_stream,
+                write_stream=write_stream,
+                initialization_options=server.create_initialization_options(),
+            )
+
+    asyncio.run(run_server())
 
 
 if __name__ == "__main__":

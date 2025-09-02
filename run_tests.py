@@ -3,7 +3,6 @@
 
 import subprocess
 import sys
-from pathlib import Path
 
 
 def main():
@@ -25,7 +24,7 @@ def main():
     ]
 
     try:
-        result = subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True)
         print("\n" + "=" * 50)
         print("✅ All tests passed!")
         print("📊 Coverage report generated in htmlcov/")

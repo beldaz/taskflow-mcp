@@ -1,17 +1,16 @@
 """Integration tests for the complete taskflow workflow."""
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from taskflow_mcp.server import (
-    _list_task_resources_sync,
     create_checklist,
     create_investigation,
     create_solution_plan,
+    list_task_resources_sync,
     update_checklist,
 )
 
@@ -19,7 +18,7 @@ from taskflow_mcp.server import (
 class TestCompleteWorkflow:
     """Test the complete taskflow workflow from start to finish."""
 
-    def test_complete_task_workflow(self, temp_dir):
+    def test_complete_task_workflow(self, temp_dir: Path) -> None:
         """Test creating a complete task with all artifacts."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "feature-123"
@@ -113,13 +112,11 @@ Implement database query optimization and caching.
             assert "CHECKLIST.json" in result4
 
             # Step 5: Verify all resources are available
-            resources = _list_task_resources_sync()
+            resources = list_task_resources_sync()
             assert len(resources) == 3
 
             # Check that all files exist and have correct content
-            investigation_path = Path(
-                temp_dir / ".tasks" / task_id / "INVESTIGATION.md"
-            )
+            investigation_path = Path(temp_dir / ".tasks" / task_id / "INVESTIGATION.md")
             solution_path = Path(temp_dir / ".tasks" / task_id / "SOLUTION_PLAN.md")
             checklist_path = Path(temp_dir / ".tasks" / task_id / "CHECKLIST.json")
 
@@ -131,11 +128,11 @@ Implement database query optimization and caching.
             assert investigation_content in investigation_path.read_text()
             assert solution_content in solution_path.read_text()
 
-            with open(checklist_path, "r") as f:
+            with open(checklist_path) as f:
                 saved_checklist = json.load(f)
             assert saved_checklist == updated_checklist
 
-    def test_multiple_tasks_workflow(self, temp_dir):
+    def test_multiple_tasks_workflow(self, temp_dir: Path) -> None:
         """Test managing multiple tasks simultaneously."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             # Create multiple tasks
@@ -143,14 +140,10 @@ Implement database query optimization and caching.
 
             for task_id in tasks:
                 # Create investigation for each task
-                create_investigation(
-                    task_id, f"# Investigation for {task_id}\n\nTask-specific content."
-                )
+                create_investigation(task_id, f"# Investigation for {task_id}\n\nTask-specific content.")
 
                 # Create solution plan for each task
-                create_solution_plan(
-                    task_id, f"# Solution Plan for {task_id}\n\nTask-specific solution."
-                )
+                create_solution_plan(task_id, f"# Solution Plan for {task_id}\n\nTask-specific solution.")
 
                 # Create checklist for each task
                 checklist = [
@@ -168,7 +161,7 @@ Implement database query optimization and caching.
                 create_checklist(task_id, checklist)
 
             # Verify all resources are listed
-            resources = _list_task_resources_sync()
+            resources = list_task_resources_sync()
             assert len(resources) == 9  # 3 tasks × 3 files each
 
             # Verify each task has all its files
@@ -182,7 +175,7 @@ Implement database query optimization and caching.
                 assert f"task://{task_id}/SOLUTION_PLAN.md" in uris
                 assert f"task://{task_id}/CHECKLIST.json" in uris
 
-    def test_task_dependencies_enforced(self, temp_dir):
+    def test_task_dependencies_enforced(self, temp_dir: Path) -> None:
         """Test that task dependencies are properly enforced."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-dependencies"
@@ -211,7 +204,7 @@ Implement database query optimization and caching.
             result = create_checklist(task_id, [])
             assert "Created" in result
 
-    def test_file_persistence(self, temp_dir):
+    def test_file_persistence(self, temp_dir: Path) -> None:
         """Test that files persist correctly and can be read back."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "persistence-test"
@@ -219,18 +212,14 @@ Implement database query optimization and caching.
             # Create all files
             investigation_content = "# Investigation\n\nThis is a test investigation."
             solution_content = "# Solution Plan\n\nThis is a test solution."
-            checklist_content = [
-                {"label": "Test task", "status": "done", "notes": "Completed"}
-            ]
+            checklist_content = [{"label": "Test task", "status": "done", "notes": "Completed"}]
 
             create_investigation(task_id, investigation_content)
             create_solution_plan(task_id, solution_content)
             create_checklist(task_id, checklist_content)
 
             # Read files back directly from filesystem
-            investigation_path = Path(
-                temp_dir / ".tasks" / task_id / "INVESTIGATION.md"
-            )
+            investigation_path = Path(temp_dir / ".tasks" / task_id / "INVESTIGATION.md")
             solution_path = Path(temp_dir / ".tasks" / task_id / "SOLUTION_PLAN.md")
             checklist_path = Path(temp_dir / ".tasks" / task_id / "CHECKLIST.json")
 
@@ -238,12 +227,12 @@ Implement database query optimization and caching.
             assert investigation_path.read_text() == investigation_content
             assert solution_path.read_text() == solution_content
 
-            with open(checklist_path, "r") as f:
+            with open(checklist_path) as f:
                 saved_checklist = json.load(f)
             assert saved_checklist == checklist_content
 
             # Verify through MCP resources
-            resources = _list_task_resources_sync()
+            resources = list_task_resources_sync()
             assert len(resources) == 3
 
             for resource in resources:

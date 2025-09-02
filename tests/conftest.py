@@ -1,10 +1,10 @@
 """Pytest configuration and fixtures for taskflow-mcp tests."""
 
-import os
-import tempfile
 import shutil
+import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
+from typing import Any
 
 import pytest
 
@@ -26,7 +26,7 @@ def mock_base_dir(temp_dir: Path) -> Generator[Path, None, None]:
 
 
 @pytest.fixture
-def sample_checklist() -> list[dict]:
+def sample_checklist() -> list[dict[str, Any]]:
     """Sample checklist data for testing."""
     return [
         {

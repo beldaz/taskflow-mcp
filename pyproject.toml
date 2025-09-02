@@ -8,15 +8,16 @@ dependencies = [
     "jsonschema"
 ]
 
-[project.optional-dependencies]
+[tool.uv]
+default-groups = ["dev"]
+required-version = ">=0.7.2"
+
+[dependency-groups]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-mock>=3.10.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-    "flake8>=6.0.0"
+    "pyright>=1.1.400",
+    "pytest>=8.3.4",
+    "ruff>=0.8.5",
+    "trio>=0.26.2",
 ]
 
 [build-system]
@@ -28,3 +29,21 @@ packages = ["taskflow_mcp"]
 
 [project.scripts]
 taskflow-mcp = "taskflow_mcp.server:main"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+include = ["taskflow_mcp", "tests"]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff.lint]
+select = ["C4", "E", "F", "I", "PERF", "UP"]
+ignore = ["PERF203"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["README.md"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]

@@ -19,8 +19,13 @@ This document provides instructions for developers working on the taskflow-mcp p
 
 2. Install development dependencies:
    ```bash
-   uv sync --extra dev
+   uv sync --frozen --all-extras --dev
    ```
+
+3. Set up pre-commit hooks:
+```bash
+uv tool install pre-commit --with pre-commit-uv --force-reinstall
+```
 
 ## Testing
 
