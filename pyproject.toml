@@ -16,6 +16,8 @@ required-version = ">=0.7.2"
 dev = [
     "pyright>=1.1.400",
     "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.2.1",
     "ruff>=0.8.5",
     "trio>=0.26.2",
 ]
