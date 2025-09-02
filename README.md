@@ -33,3 +33,9 @@ Configure Claude Code (VS Code / JetBrains) to connect:
   }
 }
 ```
+
+### Alternative (Worked for me)
+
+```bash
+claude mcp add taskflow '<path to taskflow-mcp local folder>/start-mcp.sh' -s user
+```
