@@ -68,3 +68,6 @@ markers = [
     "integration: Integration tests",
     "slow: Slow running tests"
 ]
+filterwarnings = [
+    "ignore:coroutine.*was never awaited:RuntimeWarning"
+]
