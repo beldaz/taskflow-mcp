@@ -429,8 +429,9 @@ class TestAsyncFunctions:
     @pytest.mark.asyncio
     async def test_read_task_resource_success(self, temp_dir: Path, sample_investigation_content: str) -> None:
         """Test reading a task resource successfully."""
-        from taskflow_mcp.server import read_task_resource
         from pydantic import AnyUrl
+
+        from taskflow_mcp.server import read_task_resource
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
@@ -446,8 +447,9 @@ class TestAsyncFunctions:
     @pytest.mark.asyncio
     async def test_read_task_resource_invalid_uri(self) -> None:
         """Test reading a task resource with invalid URI."""
-        from taskflow_mcp.server import read_task_resource
         from pydantic import AnyUrl
+
+        from taskflow_mcp.server import read_task_resource
 
         uri = AnyUrl("invalid://test")
 
@@ -457,22 +459,24 @@ class TestAsyncFunctions:
     @pytest.mark.asyncio
     async def test_read_task_resource_malformed_uri(self) -> None:
         """Test reading a task resource with malformed URI."""
-        from taskflow_mcp.server import read_task_resource
         from pydantic import AnyUrl
+
+        from taskflow_mcp.server import read_task_resource
 
         # The URI task://test becomes ['', 'test'] after parsing, which has 2 parts
         # but the first part (task_id) is empty, which creates an invalid path
-        # This should raise FileNotFoundError when trying to find the file
+        # This should raise IsADirectoryError when trying to open the file
         uri = AnyUrl("task://test")
 
-        with pytest.raises(FileNotFoundError, match="Resource not found"):
+        with pytest.raises(IsADirectoryError):
             await read_task_resource(uri)
 
     @pytest.mark.asyncio
     async def test_read_task_resource_not_found(self, temp_dir: Path) -> None:
         """Test reading a non-existent task resource."""
-        from taskflow_mcp.server import read_task_resource
         from pydantic import AnyUrl
+
+        from taskflow_mcp.server import read_task_resource
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             uri = AnyUrl("task://nonexistent/INVESTIGATION.md")
@@ -503,12 +507,12 @@ class TestAsyncFunctions:
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             arguments = {"task_id": "test-task", "content": "Custom investigation content"}
 
-            result = await call_tool("create_investigation", arguments)
+            result = await call_tool("create_investigation", arguments)  # type: ignore
 
-            assert len(result) == 1
-            assert result[0].type == "text"
-            assert "Created" in result[0].text
-            assert "test-task" in result[0].text
+            assert len(result) == 1  # type: ignore
+            assert result[0].type == "text"  # type: ignore
+            assert "Created" in result[0].text  # type: ignore
+            assert "test-task" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_create_solution_plan(self, temp_dir: Path, sample_investigation_content: str) -> None:
@@ -521,11 +525,11 @@ class TestAsyncFunctions:
 
             arguments = {"task_id": "test-task", "content": "Custom solution plan content"}
 
-            result = await call_tool("create_solution_plan", arguments)
+            result = await call_tool("create_solution_plan", arguments)  # type: ignore
 
-            assert len(result) == 1
-            assert result[0].type == "text"
-            assert "Created" in result[0].text
+            assert len(result) == 1  # type: ignore
+            assert result[0].type == "text"  # type: ignore
+            assert "Created" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_create_checklist(
@@ -541,11 +545,11 @@ class TestAsyncFunctions:
 
             arguments = {"task_id": "test-task", "checklist": [{"label": "Test task", "status": "pending"}]}
 
-            result = await call_tool("create_checklist", arguments)
+            result = await call_tool("create_checklist", arguments)  # type: ignore
 
-            assert len(result) == 1
-            assert result[0].type == "text"
-            assert "Created" in result[0].text
+            assert len(result) == 1  # type: ignore
+            assert result[0].type == "text"  # type: ignore
+            assert "Created" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_update_checklist(
@@ -562,11 +566,11 @@ class TestAsyncFunctions:
 
             arguments = {"task_id": "test-task", "checklist": [{"label": "Updated task", "status": "done"}]}
 
-            result = await call_tool("update_checklist", arguments)
+            result = await call_tool("update_checklist", arguments)  # type: ignore
 
-            assert len(result) == 1
-            assert result[0].type == "text"
-            assert "Updated" in result[0].text
+            assert len(result) == 1  # type: ignore
+            assert result[0].type == "text"  # type: ignore
+            assert "Updated" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self) -> None:

@@ -1,7 +1,7 @@
 """Tests for the main entry point functionality."""
 
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
