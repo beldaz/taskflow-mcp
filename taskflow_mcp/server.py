@@ -25,8 +25,7 @@ from typing import Any
 from jsonschema import validate
 from jsonschema.validators import Draft202012Validator
 from mcp.server import Server
-from mcp.types import Resource, TextContent, Tool
-from pydantic import AnyUrl
+from mcp.types import TextContent, Tool
 
 BASE_DIR = ".tasks"
 
@@ -60,95 +59,22 @@ def task_path(task_id: str, filename: str) -> str:
     return os.path.join(BASE_DIR, task_id, filename)
 
 
-# ---------------- Resource Providers ----------------
+# ---------------- Checklist helpers ----------------
 
 
-def list_task_resources_sync() -> list[Resource]:
-    """Synchronously discover and list all available task resources.
-
-    Scans the .tasks directory for all task folders and their documents.
-    Only includes files that exist: INVESTIGATION.md, SOLUTION_PLAN.md, CHECKLIST.json.
-
-    Returns:
-        List of Resource objects that can be read by AI assistants
-    """
-    resources: list[Resource] = []
-    if not os.path.exists(BASE_DIR):
-        return resources
-    for task_id in os.listdir(BASE_DIR):
-        folder = os.path.join(BASE_DIR, task_id)
-        if not os.path.isdir(folder):
-            continue
-        for fname in ["INVESTIGATION.md", "SOLUTION_PLAN.md", "CHECKLIST.json"]:
-            path = os.path.join(folder, fname)
-            if os.path.exists(path):
-                # Determine MIME type based on file extension
-                if fname.endswith(".md"):
-                    mime_type = "text/markdown"
-                elif fname.endswith(".json"):
-                    mime_type = "application/json"
-                else:
-                    mime_type = "text/plain"
-
-                resources.append(
-                    Resource(
-                        uri=AnyUrl(f"task://{task_id}/{fname}"),
-                        name=fname,
-                        mimeType=mime_type,
-                        description=f"Task {task_id} - {fname}",
-                    )
-                )
-    return resources
-
-
-@server.list_resources()
-async def list_task_resources() -> list[Resource]:
-    """List all available task resources for MCP clients.
-
-    This is the async MCP endpoint that AI assistants use to discover
-    what task documents are available to read.
-
-    Returns:
-        List of Resource objects representing available task documents
-    """
-    return list_task_resources_sync()
-
-
-@server.read_resource()
-async def read_task_resource(uri: AnyUrl) -> str:
-    """Read the content of a task resource by URI.
-
-    Parses task:// URIs to locate and read task documents.
-    URI format: task://{task_id}/{filename}
-
-    Args:
-        uri: Resource URI in format 'task://task_id/filename'
-
-    Returns:
-        File content as string
-
-    Raises:
-        ValueError: If URI format is invalid
-        FileNotFoundError: If the requested resource doesn't exist
-    """
-    uri_str = str(uri)
-    if not uri_str.startswith("task://"):
-        raise ValueError(f"Invalid resource URI: {uri_str}")
-
-    # Extract task_id and filename from URI
-    path_part = uri_str[6:]  # Remove "task://" prefix
-    parts = path_part.split("/", 1)
-    if len(parts) != 2:
-        raise ValueError(f"Invalid resource URI format: {uri_str}")
-
-    task_id, filename = parts
-    path = task_path(task_id, filename)
-
+def _load_checklist(task_id: str) -> list[dict[str, Any]]:
+    path = task_path(task_id, "CHECKLIST.json")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Resource not found: {uri_str}")
-
+        raise FileNotFoundError("CHECKLIST.json not found")
     with open(path) as f:
-        return f.read()
+        return json.load(f)
+
+
+def _save_checklist(task_id: str, checklist: list[dict[str, Any]]) -> None:
+    validate(instance=checklist, schema=CHECKLIST_SCHEMA, cls=Draft202012Validator)
+    path = task_path(task_id, "CHECKLIST.json")
+    with open(path, "w") as f:
+        json.dump(checklist, f, indent=2)
 
 
 # ---------------- Creation Methods ----------------
@@ -157,8 +83,8 @@ async def read_task_resource(uri: AnyUrl) -> str:
 # ---------------- Tool Definitions ----------------
 
 
-def create_investigation(task_id: str, content: str = "# Investigation\n\n") -> str:
-    """Create the initial investigation document for a task.
+def write_investigation(task_id: str, content: str = "# Investigation\n\n") -> str:
+    """Write the investigation document for a task (create or overwrite).
 
     This is the first step in the task workflow. Creates INVESTIGATION.md
     where you research and understand the problem before planning solutions.
@@ -174,11 +100,11 @@ def create_investigation(task_id: str, content: str = "# Investigation\n\n") -> 
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(content)
-    return f"Created {path}"
+    return f"Wrote {path}"
 
 
-def create_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> str:
-    """Create a solution plan document for a task.
+def write_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> str:
+    """Write a solution plan document for a task (create or overwrite).
 
     Second step in the workflow. Creates SOLUTION_PLAN.md where you plan
     how to solve the problem identified in the investigation.
@@ -195,15 +121,15 @@ def create_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> 
     """
     inv_path = task_path(task_id, "INVESTIGATION.md")
     if not os.path.exists(inv_path):
-        raise ValueError("Cannot create SOLUTION_PLAN.md without INVESTIGATION.md")
+        raise ValueError("Cannot write SOLUTION_PLAN.md without INVESTIGATION.md")
     path = task_path(task_id, "SOLUTION_PLAN.md")
     with open(path, "w") as f:
         f.write(content)
-    return f"Created {path}"
+    return f"Wrote {path}"
 
 
-def create_checklist(task_id: str, checklist: list[dict[str, Any]] | None = None) -> str:
-    """Create a structured checklist for task implementation.
+def write_checklist(task_id: str, checklist: list[dict[str, Any]] | None = None) -> str:
+    """Write the structured checklist for task implementation (create or overwrite).
 
     Final step in the workflow. Creates CHECKLIST.json with actionable items
     derived from the solution plan. Each item has a label, status, and optional notes.
@@ -223,41 +149,73 @@ def create_checklist(task_id: str, checklist: list[dict[str, Any]] | None = None
     """
     sol_path = task_path(task_id, "SOLUTION_PLAN.md")
     if not os.path.exists(sol_path):
-        raise ValueError("Cannot create CHECKLIST.json without SOLUTION_PLAN.md")
+        raise ValueError("Cannot write CHECKLIST.json without SOLUTION_PLAN.md")
     if checklist is None:
         checklist = []
-    validate(instance=checklist, schema=CHECKLIST_SCHEMA, cls=Draft202012Validator)
-    path = task_path(task_id, "CHECKLIST.json")
-    with open(path, "w") as f:
-        json.dump(checklist, f, indent=2)
-    return f"Created {path}"
+    _save_checklist(task_id, checklist)
+    return f"Wrote {task_path(task_id, 'CHECKLIST.json')}"
 
 
-def update_checklist(task_id: str, checklist: list[dict[str, Any]]) -> str:
-    """Update an existing checklist with new items or status changes.
+def read_investigation(task_id: str) -> str:
+    """Read the investigation document for a task."""
+    path = task_path(task_id, "INVESTIGATION.md")
+    if not os.path.exists(path):
+        raise FileNotFoundError("INVESTIGATION.md not found")
+    with open(path) as f:
+        return f.read()
 
-    Allows modification of checklist items, typically to update status
-    from 'pending' → 'in-progress' → 'done' as work progresses.
 
-    Args:
-        task_id: Unique identifier for the task
-        checklist: Complete updated list of checklist items
-                  Must follow the same schema as create_checklist
+def read_solution_plan(task_id: str) -> str:
+    """Read the solution plan document for a task."""
+    path = task_path(task_id, "SOLUTION_PLAN.md")
+    if not os.path.exists(path):
+        raise FileNotFoundError("SOLUTION_PLAN.md not found")
+    with open(path) as f:
+        return f.read()
 
-    Returns:
-        Success message with file path
 
-    Raises:
-        FileNotFoundError: If CHECKLIST.json doesn't exist
-        ValidationError: If checklist items don't match required schema
-    """
-    validate(instance=checklist, schema=CHECKLIST_SCHEMA, cls=Draft202012Validator)
+def read_checklist(task_id: str) -> str:
+    """Read the checklist document for a task as a JSON string."""
     path = task_path(task_id, "CHECKLIST.json")
     if not os.path.exists(path):
         raise FileNotFoundError("CHECKLIST.json not found")
-    with open(path, "w") as f:
-        json.dump(checklist, f, indent=2)
-    return f"Updated {path}"
+    with open(path) as f:
+        return f.read()
+
+
+def add_checklist_item(task_id: str, task_label: str) -> str:
+    """Append a single checklist item identified by its label."""
+    items = _load_checklist(task_id)
+    if any(item.get("label") == task_label for item in items):
+        raise ValueError("Checklist item already exists with this label")
+    items.append({"label": task_label, "status": "pending", "notes": None})
+    _save_checklist(task_id, items)
+    return f"Added item '{task_label}' to {task_path(task_id, 'CHECKLIST.json')}"
+
+
+def set_checklist_item_status(task_id: str, task_label: str, status: str, notes: str | None = None) -> str:
+    """Update status (and optional notes) for a single checklist item by label."""
+    if status not in {"pending", "in-progress", "done"}:
+        raise ValueError("Invalid status; must be one of: pending, in-progress, done")
+    items = _load_checklist(task_id)
+    for item in items:
+        if item.get("label") == task_label:
+            item["status"] = status
+            if notes is not None:
+                item["notes"] = notes
+            _save_checklist(task_id, items)
+            return f"Updated item '{task_label}' in {task_path(task_id, 'CHECKLIST.json')}"
+    raise FileNotFoundError("Checklist item not found")
+
+
+def remove_checklist_item(task_id: str, task_label: str) -> str:
+    """Remove a single checklist item by label."""
+    items = _load_checklist(task_id)
+    new_items = [it for it in items if it.get("label") != task_label]
+    if len(new_items) == len(items):
+        raise FileNotFoundError("Checklist item not found")
+    _save_checklist(task_id, new_items)
+    return f"Removed item '{task_label}' from {task_path(task_id, 'CHECKLIST.json')}"
 
 
 # Register tools with the server
@@ -265,9 +223,8 @@ def update_checklist(task_id: str, checklist: list[dict[str, Any]]) -> str:
 async def list_tools() -> list[Tool]:
     """List all available MCP tools for task management.
 
-    Returns the four main tools that AI assistants can use to manage
-    the structured task workflow: create_investigation, create_solution_plan,
-    create_checklist, and update_checklist.
+    Returns the tools that AI assistants can use to manage the structured
+    task workflow using a minimal read/write API with granular checklist edits.
 
     Returns:
         List of Tool objects with their schemas and descriptions
@@ -275,8 +232,8 @@ async def list_tools() -> list[Tool]:
 
     return [
         Tool(
-            name="create_investigation",
-            description="Create an investigation document for a task",
+            name="write_investigation",
+            description="Write the investigation document for a task (create or overwrite)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -291,8 +248,8 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="create_solution_plan",
-            description="Create a solution plan document for a task",
+            name="write_solution_plan",
+            description="Write the solution plan document for a task (requires investigation)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -307,8 +264,8 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="create_checklist",
-            description="Create a checklist for a task",
+            name="write_checklist",
+            description="Write the checklist document for a task (requires solution plan)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -323,18 +280,68 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="update_checklist",
-            description="Update an existing checklist for a task",
+            name="read_investigation",
+            description="Read the investigation document for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {"task_id": {"type": "string", "description": "The task ID"}},
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="read_solution_plan",
+            description="Read the solution plan document for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {"task_id": {"type": "string", "description": "The task ID"}},
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="read_checklist",
+            description="Read the checklist document for a task",
+            inputSchema={
+                "type": "object",
+                "properties": {"task_id": {"type": "string", "description": "The task ID"}},
+                "required": ["task_id"],
+            },
+        ),
+        Tool(
+            name="add_checklist_item",
+            description="Add a single checklist item (label acts as item id)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string", "description": "The task ID"},
-                    "checklist": {
-                        "type": "array",
-                        "description": "The updated checklist items",
-                    },
+                    "task_label": {"type": "string", "description": "Checklist item label (acts as id)"},
                 },
-                "required": ["task_id", "checklist"],
+                "required": ["task_id", "task_label"],
+            },
+        ),
+        Tool(
+            name="set_checklist_item_status",
+            description="Update status/notes for one checklist item by label",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "task_label": {"type": "string", "description": "Checklist item label (acts as id)"},
+                    "status": {"type": "string", "enum": ["pending", "in-progress", "done"]},
+                    "notes": {"type": ["string", "null"], "description": "Optional notes"},
+                },
+                "required": ["task_id", "task_label", "status"],
+            },
+        ),
+        Tool(
+            name="remove_checklist_item",
+            description="Remove a single checklist item by label",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID"},
+                    "task_label": {"type": "string", "description": "Checklist item label (acts as id)"},
+                },
+                "required": ["task_id", "task_label"],
             },
         ),
     ]
@@ -358,20 +365,35 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         ValueError: If the tool name is not recognized
     """
 
-    if name == "create_investigation":
-        result = create_investigation(
+    if name == "write_investigation":
+        result = write_investigation(
             task_id=arguments["task_id"],
             content=arguments.get("content", "# Investigation\n\n"),
         )
-    elif name == "create_solution_plan":
-        result = create_solution_plan(
+    elif name == "write_solution_plan":
+        result = write_solution_plan(
             task_id=arguments["task_id"],
             content=arguments.get("content", "# Solution Plan\n\n"),
         )
-    elif name == "create_checklist":
-        result = create_checklist(task_id=arguments["task_id"], checklist=arguments.get("checklist", []))
-    elif name == "update_checklist":
-        result = update_checklist(task_id=arguments["task_id"], checklist=arguments["checklist"])
+    elif name == "write_checklist":
+        result = write_checklist(task_id=arguments["task_id"], checklist=arguments.get("checklist", []))
+    elif name == "read_investigation":
+        result = read_investigation(task_id=arguments["task_id"])  # returns string
+    elif name == "read_solution_plan":
+        result = read_solution_plan(task_id=arguments["task_id"])  # returns string
+    elif name == "read_checklist":
+        result = read_checklist(task_id=arguments["task_id"])  # returns JSON string
+    elif name == "add_checklist_item":
+        result = add_checklist_item(task_id=arguments["task_id"], task_label=arguments["task_label"])
+    elif name == "set_checklist_item_status":
+        result = set_checklist_item_status(
+            task_id=arguments["task_id"],
+            task_label=arguments["task_label"],
+            status=arguments["status"],
+            notes=arguments.get("notes"),
+        )
+    elif name == "remove_checklist_item":
+        result = remove_checklist_item(task_id=arguments["task_id"], task_label=arguments["task_label"])
     else:
         raise ValueError(f"Unknown tool: {name}")
 

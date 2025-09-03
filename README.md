@@ -142,9 +142,9 @@ TaskFlow is designed to work with specialized AI agents, each optimized for a sp
 - `set_checklist_item_status(task_id, task_label, status, notes?)`
 - `remove_checklist_item(task_id, task_label)`
 
-## Proposed Minimal Tool Set
+## Implemented Tool Set
 
-Based on the specialized agent requirements, the following 6-tool API provides a clean, consistent interface:
+The TaskFlow server implements a clean, consistent API used by the agents:
 
 ### Write Tools (Create or Update)
 - `write_investigation(task_id, content)` - Write investigation document
@@ -156,35 +156,40 @@ Based on the specialized agent requirements, the following 6-tool API provides a
 - `read_solution_plan(task_id)` - Read solution plan document
 - `read_checklist(task_id)` - Read checklist document
 
+### Checklist Operations (granular)
+- `add_checklist_item(task_id, task_label)` - Append one item (item_id is the item's label)
+- `set_checklist_item_status(task_id, task_label, status, notes?)` - Update one item's status/notes
+- `remove_checklist_item(task_id, task_label)` - Remove one item
+
 ### Benefits of This Design
 - **Consistency**: All operations follow the same `write_*`/`read_*` pattern
 - **Simplicity**: No distinction between create vs. update operations
 - **Idempotency**: Writing the same content multiple times is safe
 - **Clean Logic**: Agents don't need to check if documents exist first
 
-### Implementation TODO
+### Implementation Status
 
-**Modify Existing Tools**:
-- [ ] Rename `create_investigation()` → `write_investigation()`
-- [ ] Rename `create_solution_plan()` → `write_solution_plan()`
-- [ ] Rename `create_checklist()` → `write_checklist()`
-- [ ] Rename `update_checklist()` → `write_checklist()` (merge with create)
+**Modified Existing Tools**:
+- [x] Rename `create_investigation()` → `write_investigation()`
+- [x] Rename `create_solution_plan()` → `write_solution_plan()`
+- [x] Rename `create_checklist()` → `write_checklist()`
+- [x] Rename `update_checklist()` → `write_checklist()` (merge with create)
 
-**Add New Tools**:
-- [ ] Add `read_investigation(task_id)` - Read investigation document
-- [ ] Add `read_solution_plan(task_id)` - Read solution plan document
-- [ ] Add `read_checklist(task_id)` - Read checklist document
- - [ ] Add `add_checklist_item(task_id, task_label)` - Append one item (item_id is item's label)
- - [ ] Add `set_checklist_item_status(task_id, task_label, status, notes?)` - Update one item's status/notes
- - [ ] Add `remove_checklist_item(task_id, task_label)` - Remove one item
+**Added New Tools**:
+- [x] `read_investigation(task_id)` - Read investigation document
+- [x] `read_solution_plan(task_id)` - Read solution plan document
+- [x] `read_checklist(task_id)` - Read checklist document
+- [x] `add_checklist_item(task_id, task_label)` - Append one item (item_id is item's label)
+- [x] `set_checklist_item_status(task_id, task_label, status, notes?)` - Update one item's status/notes
+- [x] `remove_checklist_item(task_id, task_label)` - Remove one item
 
-**Remove/Deprecate**:
-- [ ] Remove `read_task_resource(uri)` - Replace with specific read tools
-- [ ] Remove resource discovery endpoints - Not needed with task_id-based approach
+**Removed/Deprecated**:
+- [x] Removed `read_task_resource(uri)` - Replaced with specific read tools
+- [x] Removed resource discovery endpoints - Not needed with task_id-based approach
 
 ## API Reference
 
-### Proposed Tools for AI Agents
+### Available Tools for AI Agents
 
 **Write Tools**:
 - `write_investigation(task_id, content)` - Write investigation document
@@ -196,19 +201,14 @@ Based on the specialized agent requirements, the following 6-tool API provides a
 - `read_solution_plan(task_id)` - Read solution plan document
 - `read_checklist(task_id)` - Read checklist document
 
-### Current Implementation Status
+**Checklist Operations**:
+- `add_checklist_item(task_id, task_label)` - Append one item (item_id is item's label)
+- `set_checklist_item_status(task_id, task_label, status, notes?)` - Update one item's status/notes
+- `remove_checklist_item(task_id, task_label)` - Remove one item
 
-**Currently Available**:
-- `create_investigation(task_id, content)` - Create investigation document
-- `create_solution_plan(task_id, content)` - Create solution plan (requires investigation)
-- `create_checklist(task_id, checklist)` - Create checklist (requires solution plan)
-- `update_checklist(task_id, checklist)` - Update existing checklist
-- `read_task_resource(uri)` - Read documents via URI (to be replaced)
-
-**Needs Implementation**:
-- `read_investigation(task_id)` - Read investigation document
-- `read_solution_plan(task_id)` - Read solution plan document
-- `read_checklist(task_id)` - Read checklist document
+### Deprecated (removed)
+- `create_investigation`, `create_solution_plan`, `create_checklist`, `update_checklist`
+- `read_task_resource` and resource discovery endpoints
 
 
 

@@ -12,12 +12,16 @@ from jsonschema import ValidationError
 from taskflow_mcp.server import (
     BASE_DIR,
     CHECKLIST_SCHEMA,
-    create_checklist,
-    create_investigation,
-    create_solution_plan,
-    list_task_resources_sync,
+    add_checklist_item,
+    read_checklist,
+    read_investigation,
+    read_solution_plan,
+    remove_checklist_item,
+    set_checklist_item_status,
     task_path,
-    update_checklist,
+    write_checklist,
+    write_investigation,
+    write_solution_plan,
 )
 
 
@@ -37,18 +41,18 @@ class TestTaskPath:
         assert result == expected
 
 
-class TestCreateInvestigation:
-    """Test the create_investigation method."""
+class TestWriteInvestigation:
+    """Test the write_investigation method."""
 
     def test_create_investigation_basic(self, temp_dir: Path, sample_investigation_content: str) -> None:
         """Test creating an investigation file with default content."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
-            result = create_investigation(task_id)
+            result = write_investigation(task_id)
 
             expected_path = task_path(task_id, "INVESTIGATION.md")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = f.read()
@@ -58,11 +62,11 @@ class TestCreateInvestigation:
         """Test creating an investigation file with custom content."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
-            result = create_investigation(task_id, sample_investigation_content)
+            result = write_investigation(task_id, sample_investigation_content)
 
             expected_path = task_path(task_id, "INVESTIGATION.md")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = f.read()
@@ -72,15 +76,15 @@ class TestCreateInvestigation:
         """Test that create_investigation creates the task directory."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "nested/task"
-            create_investigation(task_id)
+            write_investigation(task_id)
 
             task_dir = os.path.dirname(task_path(task_id, "INVESTIGATION.md"))
             assert os.path.exists(task_dir)
             assert os.path.isdir(task_dir)
 
 
-class TestCreateSolutionPlan:
-    """Test the create_solution_plan method."""
+class TestWriteSolutionPlan:
+    """Test the write_solution_plan method."""
 
     def test_create_solution_plan_basic(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
@@ -89,14 +93,14 @@ class TestCreateSolutionPlan:
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
-            # First create investigation (required)
-            create_investigation(task_id, sample_investigation_content)
+            # First write investigation (required)
+            write_investigation(task_id, sample_investigation_content)
 
-            result = create_solution_plan(task_id)
+            result = write_solution_plan(task_id)
 
             expected_path = task_path(task_id, "SOLUTION_PLAN.md")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = f.read()
@@ -109,33 +113,30 @@ class TestCreateSolutionPlan:
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
-            # First create investigation (required)
-            create_investigation(task_id, sample_investigation_content)
+            # First write investigation (required)
+            write_investigation(task_id, sample_investigation_content)
 
-            result = create_solution_plan(task_id, sample_solution_plan_content)
+            result = write_solution_plan(task_id, sample_solution_plan_content)
 
             expected_path = task_path(task_id, "SOLUTION_PLAN.md")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = f.read()
             assert content == sample_solution_plan_content
 
     def test_create_solution_plan_without_investigation(self, temp_dir: Path) -> None:
-        """Test that create_solution_plan fails without investigation."""
+        """Test that write_solution_plan fails without investigation."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
-            with pytest.raises(
-                ValueError,
-                match="Cannot create SOLUTION_PLAN.md without INVESTIGATION.md",
-            ):
-                create_solution_plan(task_id)
+            with pytest.raises(ValueError, match="Cannot write SOLUTION_PLAN.md without INVESTIGATION.md"):
+                write_solution_plan(task_id)
 
 
-class TestCreateChecklist:
-    """Test the create_checklist method."""
+class TestWriteChecklist:
+    """Test the write_checklist method."""
 
     def test_create_checklist_basic(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
@@ -145,14 +146,14 @@ class TestCreateChecklist:
             task_id = "test-task"
 
             # Create required files
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
 
-            result = create_checklist(task_id)
+            result = write_checklist(task_id)
 
             expected_path = task_path(task_id, "CHECKLIST.json")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = json.load(f)
@@ -170,53 +171,50 @@ class TestCreateChecklist:
             task_id = "test-task"
 
             # Create required files
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
 
-            result = create_checklist(task_id, sample_checklist)
+            result = write_checklist(task_id, sample_checklist)
 
             expected_path = task_path(task_id, "CHECKLIST.json")
             assert os.path.exists(expected_path)
-            assert result == f"Created {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = json.load(f)
             assert content == sample_checklist
 
     def test_create_checklist_without_solution_plan(self, temp_dir: Path, sample_investigation_content: str) -> None:
-        """Test that create_checklist fails without solution plan."""
+        """Test that write_checklist fails without solution plan."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
             # Create only investigation
-            create_investigation(task_id, sample_investigation_content)
+            write_investigation(task_id, sample_investigation_content)
 
-            with pytest.raises(
-                ValueError,
-                match="Cannot create CHECKLIST.json without SOLUTION_PLAN.md",
-            ):
-                create_checklist(task_id)
+            with pytest.raises(ValueError, match="Cannot write CHECKLIST.json without SOLUTION_PLAN.md"):
+                write_checklist(task_id)
 
     def test_create_checklist_invalid_schema(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
-        """Test that create_checklist validates schema."""
+        """Test that write_checklist validates schema."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
             # Create required files
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
 
             # Invalid checklist (missing required fields)
             invalid_checklist = [{"label": "test"}]  # missing status
 
             with pytest.raises(ValidationError):
-                create_checklist(task_id, cast(list[dict[str, Any]], invalid_checklist))
+                write_checklist(task_id, cast(list[dict[str, Any]], invalid_checklist))
 
 
-class TestUpdateChecklist:
-    """Test the update_checklist method."""
+class TestChecklistOperations:
+    """Test granular checklist operations and overwrites."""
 
     def test_update_checklist_basic(
         self,
@@ -225,132 +223,89 @@ class TestUpdateChecklist:
         sample_solution_plan_content: str,
         sample_checklist: list[dict[str, Any]],
     ) -> None:
-        """Test updating an existing checklist."""
+        """Test overwriting checklist and then granular ops."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
             # Create required files and initial checklist
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
-            create_checklist(task_id, sample_checklist)
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, sample_checklist)
 
-            # Update checklist
+            # Overwrite checklist
             updated_checklist = [{"label": "Updated task", "status": "done", "notes": "Completed"}]
 
-            result = update_checklist(task_id, updated_checklist)
+            result = write_checklist(task_id, updated_checklist)
 
             expected_path = task_path(task_id, "CHECKLIST.json")
-            assert result == f"Updated {expected_path}"
+            assert result == f"Wrote {expected_path}"
 
             with open(expected_path) as f:
                 content = json.load(f)
             assert content == updated_checklist
 
-    def test_update_checklist_file_not_found(self, temp_dir: Path) -> None:
-        """Test that update_checklist fails when file doesn't exist."""
+            # Granular: add item
+            add_checklist_item(task_id, "New Task")
+            data = json.loads(read_checklist(task_id))
+            assert any(i["label"] == "New Task" and i["status"] == "pending" for i in data)
+
+            # Granular: set status and notes
+            set_checklist_item_status(task_id, "New Task", "in-progress", "Working")
+            data = json.loads(read_checklist(task_id))
+            target = next(i for i in data if i["label"] == "New Task")
+            assert target["status"] == "in-progress"
+            assert target.get("notes") == "Working"
+
+            # Granular: remove item
+            remove_checklist_item(task_id, "New Task")
+            data = json.loads(read_checklist(task_id))
+            assert all(i["label"] != "New Task" for i in data)
+
+    def test_granular_ops_require_existing_checklist(self, temp_dir: Path) -> None:
+        """Granular ops should fail if checklist is missing."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
-            checklist = [{"label": "test", "status": "pending"}]
-
             with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
-                update_checklist(task_id, checklist)
+                add_checklist_item(task_id, "X")
+            with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
+                set_checklist_item_status(task_id, "X", "pending")
+            with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
+                remove_checklist_item(task_id, "X")
 
-    def test_update_checklist_invalid_schema(
+    def test_write_checklist_invalid_schema(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
-        """Test that update_checklist validates schema."""
+        """Test that write_checklist validates schema on overwrite."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             task_id = "test-task"
 
             # Create required files and initial checklist
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
-            create_checklist(task_id, [])
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [])
 
             # Invalid checklist
             invalid_checklist = [{"label": "test"}]  # missing status
 
             with pytest.raises(ValidationError):
-                update_checklist(task_id, cast(list[dict[str, Any]], invalid_checklist))
+                write_checklist(task_id, cast(list[dict[str, Any]], invalid_checklist))
 
 
-class TestListTaskResources:
-    """Test the list_task_resources method."""
+class TestReadingHelpers:
+    """Test read_* helpers."""
 
-    def test_list_task_resources_empty(self, temp_dir: Path) -> None:
-        """Test listing resources when no tasks exist."""
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            resources = list_task_resources_sync()
-            assert resources == []
-
-    def test_list_task_resources_nonexistent_base_dir(self, temp_dir: Path) -> None:
-        """Test listing resources when base directory doesn't exist."""
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / "nonexistent")):
-            resources = list_task_resources_sync()
-            assert resources == []
-
-    def test_list_task_resources_with_tasks(
-        self,
-        temp_dir: Path,
-        sample_investigation_content: str,
-        sample_solution_plan_content: str,
-        sample_checklist: list[dict[str, Any]],
+    def test_read_investigation_and_solution_and_checklist(
+        self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
-        """Test listing resources with existing tasks."""
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            task_id = "test-task"
+            task_id = "task-1"
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [])
 
-            # Create all task files
-            create_investigation(task_id, sample_investigation_content)
-            create_solution_plan(task_id, sample_solution_plan_content)
-            create_checklist(task_id, sample_checklist)
-
-            resources = list_task_resources_sync()
-
-            # Should have 3 resources
-            assert len(resources) == 3
-
-            # Check URIs
-            uris = [str(resource.uri) for resource in resources]
-            expected_uris = [
-                f"task://{task_id}/INVESTIGATION.md",
-                f"task://{task_id}/SOLUTION_PLAN.md",
-                f"task://{task_id}/CHECKLIST.json",
-            ]
-            for expected_uri in expected_uris:
-                assert expected_uri in uris
-
-            # Check resource properties
-            for resource in resources:
-                assert resource.uri is not None
-                assert resource.name is not None
-                assert resource.mimeType is not None
-
-    def test_list_task_resources_partial_files(self, temp_dir: Path, sample_investigation_content: str) -> None:
-        """Test listing resources when only some files exist."""
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            task_id = "test-task"
-
-            # Create only investigation
-            create_investigation(task_id, sample_investigation_content)
-
-            resources = list_task_resources_sync()
-
-            # Should have only 1 resource
-            assert len(resources) == 1
-            assert str(resources[0].uri) == f"task://{task_id}/INVESTIGATION.md"
-
-    def test_list_task_resources_ignores_non_directories(self, temp_dir: Path) -> None:
-        """Test that list_task_resources ignores non-directory files in base dir."""
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            base_dir = Path(temp_dir / ".tasks")
-            base_dir.mkdir()
-
-            # Create a file (not directory) in base dir
-            (base_dir / "not-a-task").write_text("not a task")
-
-            resources = list_task_resources_sync()
-            assert resources == []
+            assert read_investigation(task_id) == sample_investigation_content
+            assert read_solution_plan(task_id) == sample_solution_plan_content
+            assert json.loads(read_checklist(task_id)) == []
 
 
 class TestChecklistSchema:
@@ -410,80 +365,6 @@ class TestAsyncFunctions:
     """Test the async server functions."""
 
     @pytest.mark.asyncio
-    async def test_list_task_resources_async(self, temp_dir: Path, sample_investigation_content: str) -> None:
-        """Test the async list_task_resources function."""
-        from taskflow_mcp.server import list_task_resources
-
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            task_id = "test-task"
-
-            # Create a task file
-            create_investigation(task_id, sample_investigation_content)
-
-            resources = await list_task_resources()
-
-            # Should have 1 resource
-            assert len(resources) == 1
-            assert str(resources[0].uri) == f"task://{task_id}/INVESTIGATION.md"
-
-    @pytest.mark.asyncio
-    async def test_read_task_resource_success(self, temp_dir: Path, sample_investigation_content: str) -> None:
-        """Test reading a task resource successfully."""
-        from pydantic import AnyUrl
-
-        from taskflow_mcp.server import read_task_resource
-
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            task_id = "test-task"
-
-            # Create a task file
-            create_investigation(task_id, sample_investigation_content)
-
-            uri = AnyUrl(f"task://{task_id}/INVESTIGATION.md")
-            content = await read_task_resource(uri)
-
-            assert content == sample_investigation_content
-
-    @pytest.mark.asyncio
-    async def test_read_task_resource_invalid_uri(self) -> None:
-        """Test reading a task resource with invalid URI."""
-        from pydantic import AnyUrl
-
-        from taskflow_mcp.server import read_task_resource
-
-        uri = AnyUrl("invalid://test")
-
-        with pytest.raises(ValueError, match="Invalid resource URI"):
-            await read_task_resource(uri)
-
-    @pytest.mark.asyncio
-    async def test_read_task_resource_malformed_uri(self) -> None:
-        """Test reading a task resource with malformed URI."""
-        from pydantic import AnyUrl
-
-        from taskflow_mcp.server import read_task_resource
-
-        # The URI task://test becomes ['', 'test'] after parsing, which has 2 parts
-        # but the first part (task_id) is empty, which creates an invalid path
-        # This should raise IsADirectoryError when trying to open the file
-        uri = AnyUrl("task://test")
-
-        with pytest.raises(IsADirectoryError):
-            await read_task_resource(uri)
-
-    @pytest.mark.asyncio
-    async def test_read_task_resource_not_found(self, temp_dir: Path) -> None:
-        """Test reading a non-existent task resource."""
-        from pydantic import AnyUrl
-
-        from taskflow_mcp.server import read_task_resource
-
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            uri = AnyUrl("task://nonexistent/INVESTIGATION.md")
-
-            with pytest.raises(FileNotFoundError, match="Resource not found"):
-                await read_task_resource(uri)
-
     @pytest.mark.asyncio
     async def test_list_tools(self) -> None:
         """Test the async list_tools function."""
@@ -491,86 +372,101 @@ class TestAsyncFunctions:
 
         tools = await list_tools()
 
-        # Should have 4 tools
-        assert len(tools) == 4
+        # Should have 9 tools
+        assert len(tools) == 9
 
         tool_names = [tool.name for tool in tools]
-        expected_tools = ["create_investigation", "create_solution_plan", "create_checklist", "update_checklist"]
+        expected_tools = [
+            "write_investigation",
+            "write_solution_plan",
+            "write_checklist",
+            "read_investigation",
+            "read_solution_plan",
+            "read_checklist",
+            "add_checklist_item",
+            "set_checklist_item_status",
+            "remove_checklist_item",
+        ]
         for expected_tool in expected_tools:
             assert expected_tool in tool_names
 
     @pytest.mark.asyncio
-    async def test_call_tool_create_investigation(self, temp_dir: Path) -> None:
-        """Test calling the create_investigation tool."""
+    async def test_call_tool_write_investigation(self, temp_dir: Path) -> None:
+        """Test calling the write_investigation tool."""
         from taskflow_mcp.server import call_tool
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             arguments = {"task_id": "test-task", "content": "Custom investigation content"}
 
-            result = await call_tool("create_investigation", arguments)  # type: ignore
+            result = await call_tool("write_investigation", arguments)  # type: ignore
 
             assert len(result) == 1  # type: ignore
             assert result[0].type == "text"  # type: ignore
-            assert "Created" in result[0].text  # type: ignore
+            assert "Wrote" in result[0].text  # type: ignore
             assert "test-task" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
-    async def test_call_tool_create_solution_plan(self, temp_dir: Path, sample_investigation_content: str) -> None:
-        """Test calling the create_solution_plan tool."""
+    async def test_call_tool_write_solution_plan(self, temp_dir: Path, sample_investigation_content: str) -> None:
+        """Test calling the write_solution_plan tool."""
         from taskflow_mcp.server import call_tool
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            # First create investigation (required)
-            create_investigation("test-task", sample_investigation_content)
+            # First write investigation (required)
+            write_investigation("test-task", sample_investigation_content)
 
             arguments = {"task_id": "test-task", "content": "Custom solution plan content"}
 
-            result = await call_tool("create_solution_plan", arguments)  # type: ignore
+            result = await call_tool("write_solution_plan", arguments)  # type: ignore
 
             assert len(result) == 1  # type: ignore
             assert result[0].type == "text"  # type: ignore
-            assert "Created" in result[0].text  # type: ignore
+            assert "Wrote" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
-    async def test_call_tool_create_checklist(
+    async def test_call_tool_write_checklist(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
-        """Test calling the create_checklist tool."""
+        """Test calling the write_checklist tool."""
         from taskflow_mcp.server import call_tool
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             # Create required files
-            create_investigation("test-task", sample_investigation_content)
-            create_solution_plan("test-task", sample_solution_plan_content)
+            write_investigation("test-task", sample_investigation_content)
+            write_solution_plan("test-task", sample_solution_plan_content)
 
             arguments = {"task_id": "test-task", "checklist": [{"label": "Test task", "status": "pending"}]}
 
-            result = await call_tool("create_checklist", arguments)  # type: ignore
+            result = await call_tool("write_checklist", arguments)  # type: ignore
 
             assert len(result) == 1  # type: ignore
             assert result[0].type == "text"  # type: ignore
-            assert "Created" in result[0].text  # type: ignore
+            assert "Wrote" in result[0].text  # type: ignore
 
     @pytest.mark.asyncio
-    async def test_call_tool_update_checklist(
+    async def test_call_tool_granular_checklist(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
-        """Test calling the update_checklist tool."""
+        """Test calling granular checklist tools."""
         from taskflow_mcp.server import call_tool
 
         with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
             # Create required files and initial checklist
-            create_investigation("test-task", sample_investigation_content)
-            create_solution_plan("test-task", sample_solution_plan_content)
-            create_checklist("test-task", [])
+            write_investigation("test-task", sample_investigation_content)
+            write_solution_plan("test-task", sample_solution_plan_content)
+            write_checklist("test-task", [])
 
-            arguments = {"task_id": "test-task", "checklist": [{"label": "Updated task", "status": "done"}]}
-
-            result = await call_tool("update_checklist", arguments)  # type: ignore
-
-            assert len(result) == 1  # type: ignore
+            # add
+            result = await call_tool("add_checklist_item", {"task_id": "test-task", "task_label": "X"})  # type: ignore
             assert result[0].type == "text"  # type: ignore
-            assert "Updated" in result[0].text  # type: ignore
+            # set
+            result = await call_tool(
+                "set_checklist_item_status",
+                {"task_id": "test-task", "task_label": "X", "status": "in-progress", "notes": "n"},
+            )  # type: ignore
+            assert result[0].type == "text"  # type: ignore
+            # remove
+            result = await call_tool("remove_checklist_item", {"task_id": "test-task", "task_label": "X"})  # type: ignore
+            assert result[0].type == "text"  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self) -> None:
@@ -580,21 +476,4 @@ class TestAsyncFunctions:
         with pytest.raises(ValueError, match="Unknown tool"):
             await call_tool("unknown_tool", {})
 
-    def test_list_task_resources_unknown_file_type(self, temp_dir: Path) -> None:
-        """Test list_task_resources_sync with unknown file type."""
-        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
-            base_dir = Path(temp_dir / ".tasks")
-            base_dir.mkdir()
-
-            # Create a task directory with one of the expected files but with unknown extension
-            task_dir = base_dir / "test-task"
-            task_dir.mkdir()
-            # Create INVESTIGATION.xyz (unknown extension) to test the else branch
-            (task_dir / "INVESTIGATION.xyz").write_text("unknown content")
-
-            resources = list_task_resources_sync()
-
-            # The function only looks for exact filenames, so INVESTIGATION.xyz won't be found
-            # This test is actually testing unreachable code since the function only looks for
-            # INVESTIGATION.md, SOLUTION_PLAN.md, and CHECKLIST.json
-            assert len(resources) == 0
+    # Resource-based endpoints removed; no tests needed for them.
