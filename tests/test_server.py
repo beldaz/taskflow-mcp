@@ -272,6 +272,70 @@ class TestChecklistOperations:
             with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
                 remove_checklist_item(task_id, "X")
 
+    def test_add_checklist_item_duplicate_label(
+        self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
+    ) -> None:
+        """Test that adding duplicate checklist item labels raises ValueError."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "test-task"
+
+            # Create required files and initial checklist
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [{"label": "Existing Task", "status": "pending"}])
+
+            # Try to add item with duplicate label
+            with pytest.raises(ValueError, match="Checklist item already exists with this label"):
+                add_checklist_item(task_id, "Existing Task")
+
+    def test_set_checklist_item_status_invalid_status(
+        self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
+    ) -> None:
+        """Test that setting invalid status values raises ValueError."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "test-task"
+
+            # Create required files and initial checklist
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [{"label": "Test Task", "status": "pending"}])
+
+            # Try to set invalid status
+            with pytest.raises(ValueError, match="Invalid status; must be one of: pending, in-progress, done"):
+                set_checklist_item_status(task_id, "Test Task", "invalid-status")
+
+    def test_set_checklist_item_status_nonexistent_item(
+        self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
+    ) -> None:
+        """Test that updating status for non-existent item raises FileNotFoundError."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "test-task"
+
+            # Create required files and initial checklist
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [{"label": "Existing Task", "status": "pending"}])
+
+            # Try to update non-existent item
+            with pytest.raises(FileNotFoundError, match="Checklist item not found"):
+                set_checklist_item_status(task_id, "Non-existent Task", "in-progress")
+
+    def test_remove_checklist_item_nonexistent_item(
+        self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
+    ) -> None:
+        """Test that removing non-existent item raises FileNotFoundError."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "test-task"
+
+            # Create required files and initial checklist
+            write_investigation(task_id, sample_investigation_content)
+            write_solution_plan(task_id, sample_solution_plan_content)
+            write_checklist(task_id, [{"label": "Existing Task", "status": "pending"}])
+
+            # Try to remove non-existent item
+            with pytest.raises(FileNotFoundError, match="Checklist item not found"):
+                remove_checklist_item(task_id, "Non-existent Task")
+
     def test_write_checklist_invalid_schema(
         self, temp_dir: Path, sample_investigation_content: str, sample_solution_plan_content: str
     ) -> None:
@@ -306,6 +370,30 @@ class TestReadingHelpers:
             assert read_investigation(task_id) == sample_investigation_content
             assert read_solution_plan(task_id) == sample_solution_plan_content
             assert json.loads(read_checklist(task_id)) == []
+
+    def test_read_investigation_file_not_found(self, temp_dir: Path) -> None:
+        """Test that read_investigation raises FileNotFoundError for non-existent files."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "non-existent-task"
+
+            with pytest.raises(FileNotFoundError, match="INVESTIGATION.md not found"):
+                read_investigation(task_id)
+
+    def test_read_solution_plan_file_not_found(self, temp_dir: Path) -> None:
+        """Test that read_solution_plan raises FileNotFoundError for non-existent files."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "non-existent-task"
+
+            with pytest.raises(FileNotFoundError, match="SOLUTION_PLAN.md not found"):
+                read_solution_plan(task_id)
+
+    def test_read_checklist_file_not_found(self, temp_dir: Path) -> None:
+        """Test that read_checklist raises FileNotFoundError for non-existent files."""
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            task_id = "non-existent-task"
+
+            with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
+                read_checklist(task_id)
 
 
 class TestChecklistSchema:
@@ -475,5 +563,38 @@ class TestAsyncFunctions:
 
         with pytest.raises(ValueError, match="Unknown tool"):
             await call_tool("unknown_tool", {})
+
+    @pytest.mark.asyncio
+    async def test_call_tool_read_investigation_file_not_found(self, temp_dir: Path) -> None:
+        """Test that MCP tool call for read_investigation raises FileNotFoundError."""
+        from taskflow_mcp.server import call_tool
+
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            arguments = {"task_id": "non-existent-task"}
+
+            with pytest.raises(FileNotFoundError, match="INVESTIGATION.md not found"):
+                await call_tool("read_investigation", arguments)
+
+    @pytest.mark.asyncio
+    async def test_call_tool_read_solution_plan_file_not_found(self, temp_dir: Path) -> None:
+        """Test that MCP tool call for read_solution_plan raises FileNotFoundError."""
+        from taskflow_mcp.server import call_tool
+
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            arguments = {"task_id": "non-existent-task"}
+
+            with pytest.raises(FileNotFoundError, match="SOLUTION_PLAN.md not found"):
+                await call_tool("read_solution_plan", arguments)
+
+    @pytest.mark.asyncio
+    async def test_call_tool_read_checklist_file_not_found(self, temp_dir: Path) -> None:
+        """Test that MCP tool call for read_checklist raises FileNotFoundError."""
+        from taskflow_mcp.server import call_tool
+
+        with patch("taskflow_mcp.server.BASE_DIR", str(temp_dir / ".tasks")):
+            arguments = {"task_id": "non-existent-task"}
+
+            with pytest.raises(FileNotFoundError, match="CHECKLIST.json not found"):
+                await call_tool("read_checklist", arguments)
 
     # Resource-based endpoints removed; no tests needed for them.

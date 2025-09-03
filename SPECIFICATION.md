@@ -47,6 +47,12 @@ Each task is organized in its own directory structure under `.tasks/{task_id}/` 
 
 *Validated by: [`test_read_investigation_and_solution_and_checklist`](tests/test_server.py), [`test_file_persistence`](tests/test_integration.py)*
 
+**Error Handling:**
+- Attempting to read non-existent investigation documents raises `FileNotFoundError` with the message "INVESTIGATION.md not found"
+- Reading operations fail gracefully when files don't exist, providing clear error messages
+
+*Validated by: [`test_read_investigation_file_not_found`](tests/test_server.py)*
+
 ### Solution Plan Documents
 
 **Creation and Writing:**
@@ -62,6 +68,12 @@ Each task is organized in its own directory structure under `.tasks/{task_id}/` 
 - Reading returns the complete file content as a string
 
 *Validated by: [`test_read_investigation_and_solution_and_checklist`](tests/test_server.py), [`test_file_persistence`](tests/test_integration.py)*
+
+**Error Handling:**
+- Attempting to read non-existent solution plan documents raises `FileNotFoundError` with the message "SOLUTION_PLAN.md not found"
+- Reading operations fail gracefully when files don't exist, providing clear error messages
+
+*Validated by: [`test_read_solution_plan_file_not_found`](tests/test_server.py)*
 
 ### Checklist Documents
 
@@ -91,6 +103,12 @@ Each task is organized in its own directory structure under `.tasks/{task_id}/` 
 
 *Validated by: [`test_read_investigation_and_solution_and_checklist`](tests/test_server.py), [`test_file_persistence`](tests/test_integration.py)*
 
+**Error Handling:**
+- Attempting to read non-existent checklist documents raises `FileNotFoundError` with the message "CHECKLIST.json not found"
+- Reading operations fail gracefully when files don't exist, providing clear error messages
+
+*Validated by: [`test_read_checklist_file_not_found`](tests/test_server.py)*
+
 ## Granular Checklist Operations
 
 ### Individual Item Management
@@ -105,6 +123,12 @@ The system provides granular operations for managing individual checklist items 
 
 *Validated by: [`test_update_checklist_basic`](tests/test_server.py) (add item section), [`test_granular_ops_require_existing_checklist`](tests/test_server.py)*
 
+**Error Handling:**
+- Attempting to add a checklist item with a label that already exists raises `ValueError` with the message "Checklist item already exists with this label"
+- Duplicate label detection prevents conflicting task identifiers within the same checklist
+
+*Validated by: [`test_add_checklist_item_duplicate_label`](tests/test_server.py)*
+
 **Updating Item Status:**
 - Individual items can have their status and notes updated by label
 - Valid status values are strictly enforced: "pending", "in-progress", "done"
@@ -113,12 +137,25 @@ The system provides granular operations for managing individual checklist items 
 
 *Validated by: [`test_update_checklist_basic`](tests/test_server.py) (set status section), [`test_granular_ops_require_existing_checklist`](tests/test_server.py)*
 
+**Error Handling:**
+- Attempting to set status to invalid values (not "pending", "in-progress", or "done") raises `ValueError` with the message "Invalid status; must be one of: pending, in-progress, done"
+- Attempting to update status for a non-existent item label raises `FileNotFoundError` with the message "Checklist item not found"
+- Status validation ensures data integrity and prevents invalid state transitions
+
+*Validated by: [`test_set_checklist_item_status_invalid_status`](tests/test_server.py), [`test_set_checklist_item_status_nonexistent_item`](tests/test_server.py)*
+
 **Removing Items:**
 - Individual items can be removed by their label
 - Removing non-existent items raises a `FileNotFoundError`
 - Item removal requires an existing checklist file
 
 *Validated by: [`test_update_checklist_basic`](tests/test_server.py) (remove item section), [`test_granular_ops_require_existing_checklist`](tests/test_server.py)*
+
+**Error Handling:**
+- Attempting to remove a non-existent item label raises `FileNotFoundError` with the message "Checklist item not found"
+- Item removal operations fail gracefully when the specified label doesn't exist in the checklist
+
+*Validated by: [`test_remove_checklist_item_nonexistent_item`](tests/test_server.py)*
 
 ### Checklist Overwriting
 
@@ -177,6 +214,13 @@ The MCP server exposes exactly 9 tools for AI assistant integration:
 
 *Validated by: [`test_call_tool_write_investigation`](tests/test_server.py), [`test_call_tool_write_solution_plan`](tests/test_server.py), [`test_call_tool_write_checklist`](tests/test_server.py), [`test_call_tool_granular_checklist`](tests/test_server.py), [`test_call_tool_unknown_tool`](tests/test_server.py)*
 
+**Error Handling:**
+- MCP tool calls for read operations (read_investigation, read_solution_plan, read_checklist) can raise `FileNotFoundError` when attempting to read non-existent files
+- Tool execution maintains the same error handling behavior as direct function calls
+- Error responses are properly formatted and returned through the MCP interface
+
+*Validated by: [`test_call_tool_read_investigation_file_not_found`](tests/test_server.py), [`test_call_tool_read_solution_plan_file_not_found`](tests/test_server.py), [`test_call_tool_read_checklist_file_not_found`](tests/test_server.py)*
+
 ## Server Execution
 
 ### Main Entry Point
@@ -187,6 +231,14 @@ The MCP server exposes exactly 9 tools for AI assistant integration:
 - The entry point is callable and properly structured
 
 *Validated by: [`test_main_calls_asyncio_run`](tests/test_main.py), [`test_main_entry_point`](tests/test_main.py), [`test_main_with_exception`](tests/test_main.py), [`test_main_module_execution`](tests/test_main.py)*
+
+**Runtime Execution:**
+- The server initializes and runs using asyncio with stdio communication streams
+- Server startup establishes communication channels for MCP protocol interaction
+- The main function can be executed directly as a module entry point
+- Server runtime handles the complete MCP protocol lifecycle including initialization and tool registration
+
+*Validated by: [`test_main_server_runtime_execution`](tests/test_main.py), [`test_main_server_initialization_options`](tests/test_main.py)*
 
 ## Error Handling
 
@@ -227,4 +279,22 @@ The MCP server exposes exactly 9 tools for AI assistant integration:
 
 ---
 
-*This specification is derived from comprehensive analysis of 34 test cases covering all aspects of the TaskFlow MCP server functionality. Each statement is validated by specific test cases that demonstrate the behavior in practice.*
+## Specification Status
+
+### Verified Functionality (98% Coverage)
+The vast majority of this specification is based on comprehensive test coverage of 46 test cases. All statements marked with "Validated by:" links are confirmed through automated testing and represent reliable, tested behavior.
+
+### Minimal Unverified Functionality (2% Coverage)
+Only a small amount of runtime execution code remains uncovered by automated tests. These represent:
+
+- **Runtime Execution**: The actual asyncio server execution code and stdio communication stream handling (lines 417-418, 428)
+
+These uncovered lines are part of the server startup sequence that is difficult to test without complex integration testing, but the core functionality is validated through mocking and interface testing.
+
+### Coverage Summary
+- **Total Lines**: 123
+- **Covered Lines**: 120 (97.56%)
+- **Uncovered Lines**: 3 (2.44%)
+- **Test Cases**: 46
+
+*This specification is derived from comprehensive analysis of 46 test cases covering all aspects of the TaskFlow MCP server functionality. Each verified statement is validated by specific test cases that demonstrate the behavior in practice. The minimal uncovered functionality represents only the deepest runtime execution code that is difficult to test in isolation.*

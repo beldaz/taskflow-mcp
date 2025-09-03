@@ -33,6 +33,8 @@ While `INVESTIGATION.md` and `SOLUTION_PLAN.md` can be markdown documents with a
 - **Status Tracking**: Structured status tracking (pending, in-progress, done) for checklist items
 - **MCP Integration**: Full Model Context Protocol support for seamless AI assistant integration
 
+> **📋 For detailed technical specifications, error handling, and complete API behavior, see [SPECIFICATION.md](SPECIFICATION.md)**
+
 ## Installation
 
 Install with [uv](https://github.com/astral-sh/uv):
