@@ -7,11 +7,9 @@ from unittest.mock import patch
 import pytest
 
 from taskflow_mcp.server import (
-    create_checklist,
-    create_investigation,
-    create_solution_plan,
-    list_task_resources_sync,
-    update_checklist,
+    write_checklist,
+    write_investigation,
+    write_solution_plan,
 )
 
 
@@ -37,8 +35,8 @@ After profiling, we found that the database queries are not optimized.
 - High bounce rate on slow pages
 """
 
-            result1 = create_investigation(task_id, investigation_content)
-            assert "Created" in result1
+            result1 = write_investigation(task_id, investigation_content)
+            assert "Wrote" in result1
             assert "INVESTIGATION.md" in result1
 
             # Step 2: Create solution plan
@@ -59,8 +57,8 @@ Implement database query optimization and caching.
 - Week 3: Monitoring and testing
 """
 
-            result2 = create_solution_plan(task_id, solution_content)
-            assert "Created" in result2
+            result2 = write_solution_plan(task_id, solution_content)
+            assert "Wrote" in result2
             assert "SOLUTION_PLAN.md" in result2
 
             # Step 3: Create initial checklist
@@ -83,8 +81,8 @@ Implement database query optimization and caching.
                 {"label": "Add query monitoring", "status": "pending", "notes": None},
             ]
 
-            result3 = create_checklist(task_id, initial_checklist)
-            assert "Created" in result3
+            result3 = write_checklist(task_id, initial_checklist)
+            assert "Wrote" in result3
             assert "CHECKLIST.json" in result3
 
             # Step 4: Update checklist as work progresses
@@ -107,13 +105,12 @@ Implement database query optimization and caching.
                 {"label": "Add query monitoring", "status": "pending", "notes": None},
             ]
 
-            result4 = update_checklist(task_id, updated_checklist)
-            assert "Updated" in result4
+            result4 = write_checklist(task_id, updated_checklist)
+            assert "Wrote" in result4
             assert "CHECKLIST.json" in result4
 
-            # Step 5: Verify all resources are available
-            resources = list_task_resources_sync()
-            assert len(resources) == 3
+            # Step 5: Verify all files exist
+            # (Resource listing functionality not available in current API)
 
             # Check that all files exist and have correct content
             investigation_path = Path(temp_dir / ".tasks" / task_id / "INVESTIGATION.md")
@@ -140,10 +137,10 @@ Implement database query optimization and caching.
 
             for task_id in tasks:
                 # Create investigation for each task
-                create_investigation(task_id, f"# Investigation for {task_id}\n\nTask-specific content.")
+                write_investigation(task_id, f"# Investigation for {task_id}\n\nTask-specific content.")
 
                 # Create solution plan for each task
-                create_solution_plan(task_id, f"# Solution Plan for {task_id}\n\nTask-specific solution.")
+                write_solution_plan(task_id, f"# Solution Plan for {task_id}\n\nTask-specific solution.")
 
                 # Create checklist for each task
                 checklist = [
@@ -158,22 +155,17 @@ Implement database query optimization and caching.
                         "notes": None,
                     },
                 ]
-                create_checklist(task_id, checklist)
+                write_checklist(task_id, checklist)
 
-            # Verify all resources are listed
-            resources = list_task_resources_sync()
-            assert len(resources) == 9  # 3 tasks × 3 files each
-
-            # Verify each task has all its files
+            # Verify all files exist for each task
             for task_id in tasks:
-                task_resources = [r for r in resources if task_id in str(r.uri)]
-                assert len(task_resources) == 3
+                investigation_path = Path(temp_dir / ".tasks" / task_id / "INVESTIGATION.md")
+                solution_path = Path(temp_dir / ".tasks" / task_id / "SOLUTION_PLAN.md")
+                checklist_path = Path(temp_dir / ".tasks" / task_id / "CHECKLIST.json")
 
-                # Check URIs
-                uris = [str(r.uri) for r in task_resources]
-                assert f"task://{task_id}/INVESTIGATION.md" in uris
-                assert f"task://{task_id}/SOLUTION_PLAN.md" in uris
-                assert f"task://{task_id}/CHECKLIST.json" in uris
+                assert investigation_path.exists()
+                assert solution_path.exists()
+                assert checklist_path.exists()
 
     def test_task_dependencies_enforced(self, temp_dir: Path) -> None:
         """Test that task dependencies are properly enforced."""
@@ -183,26 +175,26 @@ Implement database query optimization and caching.
             # Try to create solution plan without investigation - should fail
             with pytest.raises(
                 ValueError,
-                match="Cannot create SOLUTION_PLAN.md without INVESTIGATION.md",
+                match="Cannot write SOLUTION_PLAN.md without INVESTIGATION.md",
             ):
-                create_solution_plan(task_id)
+                write_solution_plan(task_id)
 
             # Create investigation
-            create_investigation(task_id, "# Investigation\n\nContent.")
+            write_investigation(task_id, "# Investigation\n\nContent.")
 
             # Try to create checklist without solution plan - should fail
             with pytest.raises(
                 ValueError,
-                match="Cannot create CHECKLIST.json without SOLUTION_PLAN.md",
+                match="Cannot write CHECKLIST.json without SOLUTION_PLAN.md",
             ):
-                create_checklist(task_id)
+                write_checklist(task_id)
 
             # Create solution plan
-            create_solution_plan(task_id, "# Solution Plan\n\nContent.")
+            write_solution_plan(task_id, "# Solution Plan\n\nContent.")
 
             # Now checklist should work
-            result = create_checklist(task_id, [])
-            assert "Created" in result
+            result = write_checklist(task_id, [])
+            assert "Wrote" in result
 
     def test_file_persistence(self, temp_dir: Path) -> None:
         """Test that files persist correctly and can be read back."""
@@ -214,9 +206,9 @@ Implement database query optimization and caching.
             solution_content = "# Solution Plan\n\nThis is a test solution."
             checklist_content = [{"label": "Test task", "status": "done", "notes": "Completed"}]
 
-            create_investigation(task_id, investigation_content)
-            create_solution_plan(task_id, solution_content)
-            create_checklist(task_id, checklist_content)
+            write_investigation(task_id, investigation_content)
+            write_solution_plan(task_id, solution_content)
+            write_checklist(task_id, checklist_content)
 
             # Read files back directly from filesystem
             investigation_path = Path(temp_dir / ".tasks" / task_id / "INVESTIGATION.md")
@@ -231,10 +223,7 @@ Implement database query optimization and caching.
                 saved_checklist = json.load(f)
             assert saved_checklist == checklist_content
 
-            # Verify through MCP resources
-            resources = list_task_resources_sync()
-            assert len(resources) == 3
-
-            for resource in resources:
-                assert resource.uri is not None
-                assert len(resource.uri) > 0
+            # Verify files exist (MCP resource listing not available in current API)
+            assert investigation_path.exists()
+            assert solution_path.exists()
+            assert checklist_path.exists()
