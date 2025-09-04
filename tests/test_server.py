@@ -12,6 +12,7 @@ from jsonschema import ValidationError
 from taskflow_mcp.server import (
     BASE_DIR,
     CHECKLIST_SCHEMA,
+    WORKING_DIR,
     add_checklist_item,
     read_checklist,
     read_investigation,
@@ -31,13 +32,13 @@ class TestTaskPath:
     def test_task_path_construction(self) -> None:
         """Test that task_path constructs correct paths."""
         result = task_path("test-task", "INVESTIGATION.md")
-        expected = os.path.join(BASE_DIR, "test-task", "INVESTIGATION.md")
+        expected = os.path.join(WORKING_DIR, BASE_DIR, "test-task", "INVESTIGATION.md")
         assert result == expected
 
     def test_task_path_with_subdirs(self) -> None:
         """Test task_path with nested directories."""
         result = task_path("nested/task", "CHECKLIST.json")
-        expected = os.path.join(BASE_DIR, "nested/task", "CHECKLIST.json")
+        expected = os.path.join(WORKING_DIR, BASE_DIR, "nested/task", "CHECKLIST.json")
         assert result == expected
 
 

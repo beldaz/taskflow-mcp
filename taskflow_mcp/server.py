@@ -19,8 +19,10 @@ Key Features:
 """
 
 import json
+import logging
 import os
 import sys
+from datetime import datetime
 from typing import Any
 
 from jsonschema import validate
@@ -31,6 +33,38 @@ from mcp.types import TextContent, Tool
 # Get working directory from environment variable, default to current directory
 WORKING_DIR = os.environ.get("TASKFLOW_WORKING_DIR", os.getcwd())
 BASE_DIR = ".tasks"
+
+
+# Setup logging configuration
+def setup_logging():
+    """Setup logging to file in .tasks directory."""
+    # Use the same working directory logic as the rest of the application
+    working_dir = os.environ.get("TASKFLOW_WORKING_DIR", os.getcwd())
+    log_dir = os.path.join(working_dir, BASE_DIR)
+    os.makedirs(log_dir, exist_ok=True)
+
+    log_file = os.path.join(log_dir, "tool_actions.log")
+
+    # Configure logging to write to file
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode="a"),
+        ],
+    )
+
+    return logging.getLogger(__name__)
+
+
+# Initialize logger
+logger = setup_logging()
+
+
+def _get_log_file_path() -> str:
+    """Get the current log file path based on WORKING_DIR."""
+    return os.path.join(WORKING_DIR, BASE_DIR, "tool_actions.log")
+
 
 CHECKLIST_SCHEMA = {
     "type": "array",
@@ -78,6 +112,37 @@ def _save_checklist(task_id: str, checklist: list[dict[str, Any]]) -> None:
     path = task_path(task_id, "CHECKLIST.json")
     with open(path, "w") as f:
         json.dump(checklist, f, indent=2)
+
+
+def _log_tool_action(tool_name: str, task_id: str, arguments: dict[str, Any], result: str | None = None) -> None:
+    """Log tool action to the tool_actions.log file.
+
+    Args:
+        tool_name: Name of the tool that was called
+        task_id: The task ID associated with the tool call
+        arguments: Arguments passed to the tool
+        result: Optional result message from the tool call
+    """
+    # Create a clean log entry
+    log_entry = {
+        "tool": tool_name,
+        "task_id": task_id,
+        "timestamp": datetime.now().isoformat(),
+        "arguments": arguments,
+    }
+
+    if result is not None:
+        log_entry["result"] = result
+
+    # Get the current log file path and ensure directory exists
+    log_file_path = _get_log_file_path()
+    log_dir = os.path.dirname(log_file_path)
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Write directly to the log file to work with patched WORKING_DIR
+    with open(log_file_path, "a") as f:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]  # Format like logging
+        f.write(f"{timestamp} - {json.dumps(log_entry)}\n")
 
 
 # ---------------- Creation Methods ----------------
@@ -404,6 +469,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         result = remove_checklist_item(task_id=arguments["task_id"], task_label=arguments["task_label"])
     else:
         raise ValueError(f"Unknown tool: {name}")
+
+    # Log the tool action
+    _log_tool_action(name, arguments["task_id"], arguments, result)
 
     return [TextContent(type="text", text=result)]
 

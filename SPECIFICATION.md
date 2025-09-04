@@ -221,6 +221,56 @@ The MCP server exposes exactly 9 tools for AI assistant integration:
 
 *Validated by: [`test_call_tool_read_investigation_file_not_found`](tests/test_server.py), [`test_call_tool_read_solution_plan_file_not_found`](tests/test_server.py), [`test_call_tool_read_checklist_file_not_found`](tests/test_server.py)*
 
+## Tool Action Logging
+
+### Automatic Logging
+
+All tool actions are automatically logged to a structured log file for audit and debugging purposes:
+
+**Log File Location:**
+- Log file is created at `.tasks/tool_actions.log`
+- Log file is created automatically when the first tool action occurs
+- Log entries are appended to the existing file (no rotation by default)
+
+*Validated by: [`test_log_file_creation`](tests/test_logging.py) - confirms that log file is created at the correct location when tools are called.*
+
+**Log Entry Format:**
+Each tool action is logged as a JSON entry containing:
+- `tool`: Name of the tool that was called
+- `task_id`: The task ID associated with the tool call
+- `timestamp`: ISO 8601 formatted timestamp of when the tool was called
+- `arguments`: Complete dictionary of arguments passed to the tool
+- `result`: Result message returned by the tool (if any)
+
+*Validated by: [`test_log_entry_format`](tests/test_logging.py) - confirms that log entries contain all required fields in proper JSON format.*
+
+**Logging Scope:**
+- All 9 MCP tools are logged (write_investigation, write_solution_plan, write_checklist, read_investigation, read_solution_plan, read_checklist, add_checklist_item, set_checklist_item_status, remove_checklist_item)
+- Both successful and failed tool calls are logged
+- Logging occurs after tool execution but before returning results to the client
+
+*Validated by: [`test_all_tools_logged`](tests/test_logging.py) - confirms that all 9 MCP tools are logged when called.*
+
+**Logging Behavior:**
+- Log entries are appended to the existing file in append mode
+- Each tool call generates exactly one log entry
+- Log file is created automatically when the first tool action occurs
+- Directory structure is created as needed for the log file
+
+*Validated by: [`test_log_file_append_mode`](tests/test_logging.py) - confirms that multiple tool calls append to the same log file.*
+
+**Logging Timing:**
+- Logging occurs after tool execution completes but before returning results to the client
+- The log entry contains the actual result that was returned to the client
+- Timestamp reflects when the logging occurred, not when the tool was called
+
+*Validated by: [`test_logging_timing`](tests/test_logging.py) - confirms that logging occurs at the correct time in the tool execution flow.*
+
+**Example Log Entry:**
+```json
+{"tool": "write_investigation", "task_id": "example-task", "timestamp": "2024-01-15T10:30:45.123456", "arguments": {"task_id": "example-task", "content": "# Investigation\n\n"}, "result": "Wrote .tasks/example-task/INVESTIGATION.md"}
+```
+
 ## Server Execution
 
 ### Main Entry Point

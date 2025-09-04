@@ -32,8 +32,23 @@ While `INVESTIGATION.md` and `SOLUTION_PLAN.md` can be markdown documents with a
 - **JSON Schema Validation**: Checklist items are validated against a strict schema
 - **Status Tracking**: Structured status tracking (pending, in-progress, done) for checklist items
 - **MCP Integration**: Full Model Context Protocol support for seamless AI assistant integration
+- **Automatic Logging**: All tool actions are logged to `.tasks/tool_actions.log` for audit and debugging
 
 > **📋 For detailed technical specifications, error handling, and complete API behavior, see [SPECIFICATION.md](SPECIFICATION.md)**
+
+## Logging
+
+TaskFlow automatically logs all tool actions to a structured log file for audit and debugging purposes:
+
+- **Log File**: `.tasks/tool_actions.log` (created automatically)
+- **Format**: JSON entries with timestamp, tool name, task ID, arguments, and results
+- **Scope**: All 9 MCP tools are logged automatically
+- **Purpose**: Provides complete audit trail of AI assistant interactions
+
+Example log entry:
+```json
+{"tool": "write_investigation", "task_id": "feature-123", "timestamp": "2024-01-15T10:30:45.123456", "arguments": {"task_id": "feature-123", "content": "# Investigation\n\n"}, "result": "Wrote .tasks/feature-123/INVESTIGATION.md"}
+```
 
 ## Installation
 
