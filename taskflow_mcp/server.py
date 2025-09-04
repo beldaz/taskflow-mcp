@@ -20,6 +20,7 @@ Key Features:
 
 import json
 import os
+import sys
 from typing import Any
 
 from jsonschema import validate
@@ -27,6 +28,8 @@ from jsonschema.validators import Draft202012Validator
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+# Get working directory from environment variable, default to current directory
+WORKING_DIR = os.environ.get("TASKFLOW_WORKING_DIR", os.getcwd())
 BASE_DIR = ".tasks"
 
 CHECKLIST_SCHEMA = {
@@ -54,9 +57,9 @@ def task_path(task_id: str, filename: str) -> str:
         filename: Name of the file (e.g., 'INVESTIGATION.md', 'CHECKLIST.json')
 
     Returns:
-        Full file path: .tasks/{task_id}/{filename}
+        Full file path: {WORKING_DIR}/.tasks/{task_id}/{filename}
     """
-    return os.path.join(BASE_DIR, task_id, filename)
+    return os.path.join(WORKING_DIR, BASE_DIR, task_id, filename)
 
 
 # ---------------- Checklist helpers ----------------
@@ -96,11 +99,15 @@ def write_investigation(task_id: str, content: str = "# Investigation\n\n") -> s
     Returns:
         Success message with file path
     """
+    print(f"TaskFlow MCP Server: write_investigation called with task_id='{task_id}'", file=sys.stderr)
     path = task_path(task_id, "INVESTIGATION.md")
+    print(f"TaskFlow MCP Server: Creating file at path: {path}", file=sys.stderr)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(content)
-    return f"Wrote {path}"
+    result = f"Wrote {path}"
+    print(f"TaskFlow MCP Server: {result}", file=sys.stderr)
+    return result
 
 
 def write_solution_plan(task_id: str, content: str = "# Solution Plan\n\n") -> str:
@@ -364,6 +371,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     Raises:
         ValueError: If the tool name is not recognized
     """
+    print(f"TaskFlow MCP Server: Tool call received - name='{name}', arguments={arguments}", file=sys.stderr)
 
     if name == "write_investigation":
         result = write_investigation(
@@ -412,6 +420,21 @@ def main() -> None:
     import asyncio
 
     from mcp import stdio_server
+
+    # Create .tasks directory and print debug information
+    try:
+        tasks_path = os.path.join(WORKING_DIR, BASE_DIR)
+        os.makedirs(tasks_path, exist_ok=True)
+        print(f"TaskFlow MCP Server: Created .tasks directory at {tasks_path}", file=sys.stderr)
+        print(f"TaskFlow MCP Server: Working directory: {WORKING_DIR}", file=sys.stderr)
+        print(f"TaskFlow MCP Server: Files will be created in: {tasks_path}/{{task_id}}/", file=sys.stderr)
+        if WORKING_DIR != os.getcwd():
+            print(
+                f"TaskFlow MCP Server: Note: Working directory differs from server location ({os.getcwd()})",
+                file=sys.stderr,
+            )
+    except Exception as e:
+        print(f"TaskFlow MCP Server: Error creating .tasks directory: {e}", file=sys.stderr)
 
     async def run_server():
         async with stdio_server() as (read_stream, write_stream):

@@ -45,9 +45,47 @@ uv add git+https://github.com/yourname/taskflow-mcp.git
 
 ## Usage
 
+### Basic Usage
+
 Run the MCP server in the root of your code repository:
 ```bash
 taskflow-mcp
+```
+
+### Working Directory Configuration
+
+By default, TaskFlow creates the `.tasks` directory in the current working directory. To specify a different project directory, you have several options:
+
+**Option 1: Using the start script (recommended)**
+```bash
+# For current directory
+./start-mcp.sh
+
+# For a specific project directory
+./start-mcp.sh /path/to/your/project
+```
+
+**Option 2: Using environment variable**
+```bash
+# For a specific project directory
+TASKFLOW_WORKING_DIR=/path/to/your/project taskflow-mcp
+```
+
+### Claude Desktop Integration
+
+Add to your Claude Desktop MCP configuration:
+```json
+{
+  "mcpServers": {
+    "taskflow": {
+      "command": "taskflow-mcp",
+      "args": [],
+      "env": {
+        "TASKFLOW_WORKING_DIR": "/path/to/your/project"
+      }
+    }
+  }
+}
 ```
 
 Configure Claude Code (VS Code / JetBrains) to connect:
